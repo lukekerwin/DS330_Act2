@@ -1,0 +1,51 @@
+---
+title: "Activity 2"
+author: "Nick Malloy"
+format: pdf
+editor: visual
+toc: True
+---
+
+# Exploratory Data Analysis 
+
+```{r}
+insuranceData <- read.csv("activity2_insurance.csv")
+library(tidyverse)
+library(ggplot2)
+```
+
+```{r}
+insuranceData%>%
+  select(age,smoker,charges)%>%
+  ggplot(aes(x = age, y = charges))+
+  geom_point(aes(color = smoker))
+```
+Here we can see some of the customers with the highest charge amounts are smokers and that age isn't a huge indicator of high charges.
+```{r}
+insuranceData%>%
+  na.omit()%>%
+  group_by(region)%>%
+  summarise(meanCharges = mean(charges))
+```
+The Southeast region is showing the highest average charges overall, so there could be some geographical differences. 
+```{r}
+insuranceData%>%
+  select(bmi,region,charges)%>%
+  ggplot(aes(x=bmi, y = charges))+
+  geom_point()+
+  facet_wrap(~ region)
+```
+
+```{r}
+insuranceData%>%
+  select(bmi,children,charges)%>%
+  ggplot(aes(x = bmi, y = charges))+
+  geom_point(aes(color = "red"))+
+  facet_wrap(~ children)
+```
+```{r}
+cleanedData <-
+  insuranceData%>%
+  mutate(isMale = ifelse(sex == "male", 1,0), smokes=ifelse(smoker == "yes",1,0),northeast = ifelse(region == "northeast",1,0),northwest = ifelse(region =="northwest",1,0),southeast=ifelse(region=="southeast",1,0),southwest=ifelse(region=="southwest",1,0))
+cleanedData
+```
