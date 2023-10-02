@@ -1,0 +1,44 @@
+---
+title: "Activity 2"
+output: html_notebook
+---
+
+```{r}
+data <- read.csv("/Users/lukekerwin/Downloads/activity2_insurance.csv")
+data
+```
+
+```{r}
+categorical_vars = c("sex","smoker","region")
+data$is_male = 0
+data$is_male[which(data$sex == "male")] = 1
+
+data$is_smoker = 0
+data$is_smoker[which(data$smoker == "yes")] = 1
+
+data$is_southwest = 0
+data$is_northwest = 0
+data$is_northeast = 0
+data$is_southeast = 0
+
+data$is_southwest[which(data$region == "southwest")] = 1
+data$is_southeast[which(data$region == "southeast")] = 1
+data$is_northeast[which(data$region == "northeast")] = 1
+data$is_northeast[which(data$region == "northeast")] = 1
+
+library(dplyr)
+standardized <- data %>%
+  select("caseID","age","bmi","children","charges","is_male","is_smoker","is_southwest","is_northwest","is_northeast","is_southeast")
+print(standardized)
+```
+
+```{r}
+# General Structure of lm call ----
+model1 <- lm(
+  formula = charges ~ is_smoker,
+  data = standardized,
+  na.action = "na.omit"
+)
+
+summary(model1)
+```
