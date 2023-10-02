@@ -1,1 +1,1 @@
-# DS330_Act2
+# Statistics 380 - Activity 2
