@@ -1,0 +1,68 @@
+---
+title: "Activity 2"
+author: "Nick Malloy"
+format: pdf
+editor: visual
+toc: True
+---
+
+# Exploratory Data Analysis 
+
+```{r,echo = FALSE}
+insuranceData <- read.csv("activity2_insurance.csv")
+library(tidyverse)
+library(ggplot2)
+```
+
+```{r,echo = FALSE}
+insuranceData%>%
+  select(age,smoker,charges)%>%
+  ggplot(aes(x = age, y = charges))+
+  geom_point(aes(color = smoker))
+```
+Here we can see some of the customers with the highest charge amounts are smokers and that age isn't a huge indicator of high charges.
+```{r,echo = FALSE}
+insuranceData%>%
+  na.omit()%>%
+  group_by(region)%>%
+  summarise(meanCharges = mean(charges))
+```
+The Southeast region is showing the highest average charges overall, so there could be some geographical differences. 
+```{r,echo = FALSE}
+insuranceData%>%
+  select(bmi,region,charges)%>%
+  ggplot(aes(x=bmi, y = charges))+
+  geom_point()+
+  facet_wrap(~ region)
+```
+All regions follow the same sort of correlation for BMI and charges.
+```{r,echo = FALSE}
+insuranceData%>%
+  select(bmi,children,charges)%>%
+  ggplot(aes(x = bmi, y = charges))+
+  geom_point(aes(color = "red"))+
+  facet_wrap(~ children)
+```
+Customers with 3 or less children show the same general positive correlation between their BMI and charges. Also important to note that we don't have many customers with 4 or more children. 
+```{r,echo = FALSE}
+insuranceData2 <-
+  insuranceData%>%
+  select(sex,region,smoker)%>%
+  group_by(sex,region)%>%
+  mutate(TotalPeople = n())%>%
+  pivot_longer(smoker, values_to = "smoker")%>%
+  select(sex,region,smoker,TotalPeople)%>%
+  group_by(sex,region,smoker)%>%
+  summarise(PercentOfTotal = n()/TotalPeople)%>%
+  distinct()%>%
+  arrange(region)
+split_insurance <- list()
+num_rows <- nrow(insuranceData2)
+for (i in seq(1, num_rows, by = 4)) {
+  end_index <- min(i + 4 - 1, num_rows)
+  current_split <- insuranceData2[i:end_index, ]
+  split_insurance[[length(split_insurance) + 1]] <- current_split
+}
+split_insurance
+```
+Here are demographic data frames for each region, split into gender and whether they're a smoker or not. Percent of Total refers to their specific gender.
