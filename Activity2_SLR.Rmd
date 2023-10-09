@@ -1,34 +1,250 @@
 ---
 title: "Activity 2"
-output: html_notebook
+author: "Luke Kerwin, Nick Malloy, Dinni Bhardwaj"
+output: pdf_document
+opts_chunk:
+  echo: no
 ---
+
+```{r,echo = FALSE, message=FALSE, warning=FALSE, results='hide'}
+# Packages Used
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(kableExtra)
+library(knitr)
+```
 
 # Introduction / Background
 
+Hatfield Insurance Company, a giant in the healthcare industry, seeks to optimize its pricing strategies for health insurance policies. Determining the cost of these policies is crucial for the company's sustainability and ensuring value for its policyholders. To address this, our team will employ linear regression, a basic yet effective statistical method, to predict potential policy costs. By analyzing how various factors influence these costs, we aim to provide Hatfield with a foundational model to guide their pricing decisions.
+
 # Data Exploration
 
-# Results
+First we will get a look at the raw data itself:
 
-## Inital Results
+### Raw Data
 
-## Interpretations
+```{r,echo = FALSE}
 
-## Model Evaluation
-
-## Refinements
-
-# Final Reccomendations
-
-# Author Contributions
-
-# Code Appendix
-
-
-```{r}
+# Load in data
 data <- read.csv("/Users/lukekerwin/Downloads/activity2_insurance.csv")
-data
+data <- na.omit(data)
+
+# Show first 10 rows of the raw data using kable
+head(data, 10) %>%
+  kable(
+    align = "cccc",
+    booktab = TRUE
+  ) %>%
+  kableExtra::kable_classic(
+    latex_options = c("HOLD_position"),
+    full_width = FALSE
+  )
 ```
-```{r}
+
+From the sample above, we can see that there are eight columns. Six of the eight columns have a category characteristic to them. `caseID` is ordinal and likely is irrelevent to predicting charges, but we will leave it in for now. `age`, `sex`, `children`, `smoker`, and `region` are the remaining "categorical" columns. Each one likely is somewhat correlated to our target column; `charges`. We also notice that since we are using linear regression techniques, we will have to manipulate the categorical columns so that the model can easily read them.
+
+### Demographic Exploration
+
+```{r,echo = FALSE, fig.width=7, fig.height=4}
+
+# Simple plot of charges vs age with smoker as a color identifier
+data%>%
+  select(age,smoker,charges)%>%
+  ggplot(aes(x = age, y = charges))+
+  geom_point(aes(color = smoker))
+```
+
+Here we can see some of the customers with the highest charge amounts are smokers and that age isn't a huge indicator of high charges.
+
+Next we will take a look at the different demographics using `bmi` and `charges`:
+
+```{r,echo = FALSE, fig.width=7, fig.height=3.5}
+
+# Plot of charges vs bmi with demographics
+data %>%
+  ggplot(
+    mapping = aes(x = bmi, y = charges)
+  ) +
+  geom_point(size = 0.5) +
+  theme_bw() +
+  xlab("BMI") + 
+  ylab("Charges") +
+  facet_grid(rows = vars(region), cols = vars(sex))
+```
+
+Here we can see that there likely isn't much of a different between males and females due to the plots all looking relatively the same. It can also be said for region as well. The plots arent the same, but they have roughly the same shape. Now lets take a look at the correlation between the continuous variables as well as with the target variable.
+
+### Correlation Matrix (Continuous Variables)
+
+```{r,echo = FALSE}
+
+continuous_data = data %>%
+  select(caseID, age, bmi, children, charges)
+# Correlation Matrix visual using caseID, age, bmi, children and charges
+cor_matrix <- cor(continuous_data)
+cor_matrix %>%
+  kable(
+    digits = 4,
+    align = "cccc",
+    booktab = TRUE,
+  ) %>%
+  kableExtra::kable_classic(
+    latex_options = c("HOLD_position"),
+    full_width = FALSE
+  )
+```
+
+The table above shows that we dont have any major co-linear columns which is a good thing. It means we wont have to remove any columns. We also can see that the column that correlates the most with `charges` is `age`. The second and third most correlated variables are `bmi` and `children`. As hypothesized before, `caseID` essentially has no correlation to charges which means we can get exclude it from the model.
+
+# Model Construction
+
+We decided to make two models; one simple linear regression model and one multiple linear regression model.
+
+## Model 1: Simple Linear Regression
+
+Simple linear regression (SLR) models use one variable for X. In this case we have chosen `age` as it is the most correlated to our target `charges`. Here is how the SLR model using `age` performs:
+
+```{r,echo = FALSE}
+
+# SLR Model 1 (age)
+slr_model_age <- lm(
+  formula = charges ~ age,
+  data = data,
+  na.action = "na.omit"
+)
+# Coefficient Table (Model 1)
+coefTable <- summary(slr_model_age)$coefficients
+rownames(coefTable) <- c("Intercept", "Age (years)")
+coefTable %>%
+  kable(
+    digits = 3,
+    align = "cccc",
+    booktab = TRUE
+  ) %>%
+  kableExtra::kable_classic(
+    latex_options = c("HOLD_position"),
+    full_width = FALSE
+  )
+
+# R2 Table (Model1)
+r2Table <- data.frame(
+  R_Squared = summary(slr_model_age)$r.squared,
+  Adjusted_R_Squared = summary(slr_model_age)$adj.r.squared
+)
+
+r2Table %>%
+  kable(
+    digits = 3,
+    align = "c",
+    booktab = TRUE
+  ) %>%
+  kableExtra::kable_classic(
+    latex_options = c("HOLD_position"),
+    full_width = FALSE
+  )
+```
+
+Trying to predict `charges` from one variable is going to be tough. The model tells us that essentially for every 1 year increase in age, the predicted charges increase by `r round(coefficients(slr_model_age)[2], 2)` dollars. We also see that the R^2 value is `0.093`. This means that 9.3% of the variability in `charges` can be explained by the `age` in our model. Not great, but also not horrible considering we are only using one variable. Now lets split the data into a training and test set so we can properly asses the model.
+
+```{r,echo = FALSE}
+
+# Form training set ----
+set.seed(716)
+trainingData <- data %>%
+  slice_sample(prop = 0.8)
+
+# Form testing set ----
+testingData <- data %>%
+  filter(!(caseID %in% trainingData$caseID))
+
+# Train model ----
+slr_model_age <- lm(
+  formula = charges ~ age,
+  data = trainingData,
+  na.action = "na.omit"
+)
+
+# Predict ----
+predictions <- predict(slr_model_age, newdata=testingData)
+
+# Add predictions to data frame and find residuals ----
+testingData$prediction <- predictions
+testingData <- testingData %>%
+  mutate(
+    residuals = charges - prediction
+  )
+
+# Output Tables ----
+coefTable <- summary(slr_model_age)$coefficients
+rownames(coefTable) <- c("Intercept", "Age (years)")
+coefTable %>%
+  kable(
+    digits = 3,
+    align = "cccc",
+    booktab = TRUE
+  ) %>%
+  kableExtra::kable_classic(
+    latex_options = c("HOLD_position"),
+    full_width = FALSE
+  )
+
+r2Table <- data.frame(
+  R_Squared = summary(slr_model_age)$r.squared,
+  Adjusted_R_Squared = summary(slr_model_age)$adj.r.squared
+)
+
+r2Table %>%
+  kable(
+    digits = 3,
+    align = "c",
+    booktab = TRUE
+  ) %>%
+  kableExtra::kable_classic(
+    latex_options = c("HOLD_position"),
+    full_width = FALSE
+  )
+```
+
+### Results
+
+```{r, echo=FALSE}
+
+# Plot actual vs. predicted values
+df_mlr <- data.frame(Actual = testingData$charges, Predicted = testingData$prediction)
+ggplot(df_mlr, aes(x = Actual, y = Predicted)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +
+  theme_minimal() +
+  labs(title = "Actual vs. Predicted Charges",
+       x = "Actual Charges",
+       y = "Predicted Charges")
+```
+
+Using a test/train split of `0.8` we get a training data set with 860 rows and a testing data set with 216 rows. Using the training set we roughly the same results as when we used the entire data set, which was expected. When we look at the RMSE, we get a value of `r format(sqrt(mean(testingData$residuals^2, na.rm = TRUE)), scientific=FALSE)` which tells us that there is an average error of `r format(sqrt(mean(testingData$residuals^2, na.rm = TRUE)), scientific=FALSE)` between the predictions and the actuals. Here is a plot of the residuals:
+
+```{r, echo=FALSE, fig.width=7, fig.height=3.5}
+
+# Scatter plot of residuals
+ggplot(testingData, aes(x=prediction, y=residuals)) +
+  geom_point(aes(color=age), alpha=0.5) +  # Color points by age for added detail
+  geom_hline(yintercept=0, linetype="dashed", color="red") +  # Add a horizontal line at y=0
+  theme_minimal() +
+  labs(
+    title="Residuals vs. Fitted Values",
+    x="Fitted values",
+    y="Residuals",
+    color="Age"
+  )
+```
+
+## Model 2: Multiple Linear Regression
+
+Unlike SLR models, Multiple Linear Regression models use more than one variable for X. For fun we are going to use all of the variables possible to see what the model looks like compared to the SLR model made earlier. But before we can do that, we need to make our data friendly for the `lm()` function to use. This means we have to manipulate our data so that the categorical variables are in matrix form. After the manipulation, our data now looks like this:
+
+```{r, echo=FALSE}
+
 categorical_vars = c("sex","smoker","region")
 data$is_male = 0
 data$is_male[which(data$sex == "male")] = 1
@@ -39,126 +255,150 @@ data$is_smoker[which(data$smoker == "yes")] = 1
 data$is_southwest = 0
 data$is_northwest = 0
 data$is_northeast = 0
-data$is_southeast = 0
 
 data$is_southwest[which(data$region == "southwest")] = 1
-data$is_southeast[which(data$region == "southeast")] = 1
 data$is_northeast[which(data$region == "northeast")] = 1
 data$is_northeast[which(data$region == "northeast")] = 1
 
-library(dplyr)
 standardized <- data %>%
-  select("caseID","age","bmi","children","charges","is_male","is_smoker","is_southwest","is_northwest","is_northeast","is_southeast")
-print(standardized)
-```
-```{r}
-correlation_matrix <- cor(standardized)
-nan_positions <- is.na(correlation_matrix)
-correlation_matrix[nan_positions] <- 0
-library(ggcorrplot)
-ggcorrplot(correlation_matrix, hc.order = TRUE, type = "lower", lab = TRUE)
-```
+  select("caseID","age","bmi","children","charges","is_male","is_smoker","is_southwest","is_northwest","is_northeast")
 
-```{r}
-# General Structure of lm call ----
-model1 <- lm(
-  formula = charges ~ age,
-  data = standardized,
-  na.action = "na.omit"
-)
-
-library(kableExtra)
-# Professional Looking Model Coefficient Table ----
-coefTable <- summary(model1)$coefficients
-rownames(coefTable) <- c("Intercept", "Age (years)")
-coefTable %>%
+head(standardized, 10) %>%
   kable(
-    digits = 3,
     align = "cccc",
-    booktab = TRUE,
-    table.attr = 'data-quarto-disable-processing="true"'
+    booktab = TRUE
   ) %>%
   kableExtra::kable_classic(
     latex_options = c("HOLD_position"),
     full_width = FALSE
-  ) %>%
-  kableExtra::footnote(
-    general = "Computer rounding has made the p-values look like zero.",
-    general_title = "Note:",
-    footnote_as_chunk = TRUE
   )
 ```
 
-```{r}
-# Load required libraries
-library(ggplot2)
-library(caret)
-library(gridExtra)
+### Results
 
-# Split the dataset into training and testing sets
-set.seed(123) # for reproducibility
-standardized <- na.omit(standardized)
-splitIndex <- createDataPartition(standardized$charges, p = 0.7, list = FALSE)
-trainData <- standardized[splitIndex, ]
-testData <- standardized[-splitIndex, ]
+```{r, echo=FALSE}
 
-# List of features
-features <- c("age", "bmi", "children", "is_male", "is_smoker", "is_southwest", "is_northwest", "is_northeast", "is_southeast")
+# Form training set ----
+set.seed(716)
+trainingData <- standardized %>%
+  slice_sample(prop = 0.8)
 
-# Initialize a list to store plots
-plot_list <- list()
-
-# Train SLR models for each feature and store plots in the list
-for (feature in features) {
-  formula <- as.formula(paste("charges ~", feature))
-  model <- lm(formula, data = trainData)
-  
-  # Predict on test data
-  predictions <- predict(model, newdata = testData)
-  
-  # Plot actual vs. predicted values
-  df <- data.frame(Actual = testData$charges, Predicted = predictions)
-  p <- ggplot(df, aes(x = Actual, y = Predicted)) +
-    geom_point() +
-    geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +
-    theme_minimal() +
-    labs(title = paste("Actual vs. Predicted for", feature),
-         x = "Actual Charges",
-         y = "Predicted Charges")
-  
-  # Append the plot to the list
-  plot_list[[feature]] <- p
-}
-
-# Display all plots in one output
-do.call(grid.arrange, c(plot_list, ncol=3))
-
-
-```
-
-```{r}
-# Split the dataset into training and testing sets
-set.seed(123) # for reproducibility
-splitIndex <- createDataPartition(standardized$charges, p = 0.7, list = FALSE)
-trainData <- standardized[splitIndex, ]
-testData <- standardized[-splitIndex, ]
+# Form testing set ----
+testingData <- standardized %>%
+  filter(!(caseID %in% trainingData$caseID))
 
 # Train MLR model using all features
-formula <- charges ~ age + bmi + children + is_male + is_smoker + is_southwest + is_northwest + is_northeast + is_southeast
-model_mlr <- lm(formula, data = trainData)
+formula <- charges ~ age + bmi + children + is_male + is_smoker + is_southwest + is_northwest + is_northeast
+model_mlr <- lm(formula, data = trainingData)
 
 # Predict on test data
-predictions_mlr <- predict(model_mlr, newdata = testData)
+predictions_mlr <- predict(model_mlr, newdata = testingData)
+
+# Add predictions to data frame and find residuals ----
+testingData$prediction <- predictions_mlr
+testingData <- testingData %>%
+  mutate(
+    residuals = charges - prediction
+  )
+
+# Output Tables ----
+coefTable <- summary(model_mlr)$coefficients
+coefTable %>%
+  kable(
+    digits = 3,
+    align = "cccc",
+    booktab = TRUE
+  ) %>%
+  kableExtra::kable_classic(
+    latex_options = c("HOLD_position"),
+    full_width = FALSE
+  )
+
+r2Table <- data.frame(
+  R_Squared = summary(model_mlr)$r.squared,
+  Adjusted_R_Squared = summary(model_mlr)$adj.r.squared
+)
+
+r2Table %>%
+  kable(
+    digits = 3,
+    align = "c",
+    booktab = TRUE
+  ) %>%
+  kableExtra::kable_classic(
+    latex_options = c("HOLD_position"),
+    full_width = FALSE
+  )
+```
+
+Using the same training and testing sets as the SLR model, we see a massive improvement in model performance. Our intercept doesnt make a ton of sense, but that was expected with the fact we are using seven variables. We can also see that being a smoker makes a big different in the predicted charges. If someone is a smoker, it adds on average `$22,802` to their predicted charges. Our R\^2 value is now `0.723`, over a 800% increase in performance. Even the Actual vs Predicted plot looks much better than the previous:
+
+```{r, echo=FALSE}
 
 # Plot actual vs. predicted values
-df_mlr <- data.frame(Actual = testData$charges, Predicted = predictions_mlr)
-p_mlr <- ggplot(df_mlr, aes(x = Actual, y = Predicted)) +
+df_mlr <- data.frame(Actual = testingData$charges, Predicted = predictions_mlr)
+ggplot(df_mlr, aes(x = Actual, y = Predicted)) +
   geom_point() +
   geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +
   theme_minimal() +
-  labs(title = "Actual vs. Predicted Charges (MLR)",
+  labs(title = "Actual vs. Predicted Charges",
        x = "Actual Charges",
        y = "Predicted Charges")
+```
 
-print(p_mlr)
+Looking at these residuals, we can see that the gaps are much closer for the smaller charges, but we still have pretty large residuals for charges greater than \$20,000.
+
+```{r, echo=FALSE, fig.width=7, fig.height=3.5}
+
+# Scatter plot of residuals
+ggplot(testingData, aes(x=prediction, y=residuals)) +
+  geom_point(aes(color=age), alpha=0.5) +  # Color points by age for added detail
+  geom_hline(yintercept=0, linetype="dashed", color="red") +  # Add a horizontal line at y=0
+  theme_minimal() +
+  labs(
+    title="Residuals vs. Fitted Values",
+    x="Fitted values",
+    y="Residuals",
+    color="Age"
+  )
+```
+
+## Conclusion
+
+As previously mentioned, we saw a huge increase in performance going from a simple LR model to a multiple LR model. In conclusion, it makes the most sense to use MLR in this scenario as there are not any single variables that correlate enough to the target to use SLR. Theres also room to build on our findings and use feature selection to possibly optimize the model even further. The counter point would be that it isnt great for predicting charges over `$20,000` so there is room for growth there.
+
+## Final Reccomendation
+
+We reccomend using a multiple linear regression model that uses a standardized dataset consisting of the columns `age`, `bmi`, `children`, `is_male`, `is_smoker`, `is_southwest`, `is_northwest`, and `is_northeast`. The model will do a solid job of predicting charges less than `$20,000`. Hatfield Insurance Company may want to consider collecting more information on each case to help improve the predictions on cases over `$20,000`. The exact parameters of the model can be seen below:
+
+```{r, echo=FALSE}
+coefTable <- summary(model_mlr)$coefficients
+coefTable %>%
+  kable(
+    digits = 3,
+    align = "cccc",
+    booktab = TRUE
+  ) %>%
+  kableExtra::kable_classic(
+    latex_options = c("HOLD_position"),
+    full_width = FALSE
+  )
+```
+
+# Author Contributions
+
+-   Luke Kerwin -- Modeling and Model Evaluation
+
+-   Nick Malloy -- EDA and EDA Visualizations
+
+-   Dinni Bhardwaj -- Report creation and formatting
+
+\newpage
+
+# Code Appendix
+
+```{r codeAppendix}
+#| ref.label = knitr::all_labels(),
+#| echo = TRUE,
+#| eval = FALSE
 ```
